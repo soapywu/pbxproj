@@ -1,0 +1,260 @@
+{
+    package pegparser
+
+    import (
+        "strings"
+        "errors"
+        "strconv"
+	    "encoding/json"
+    )
+
+    type Object map[string]interface{}
+
+    func newObject() Object {
+        return make(Object)
+    }
+
+    func merge_obj(obj Object, secondObj Object) Object {
+        if obj == nil {
+            return secondObj
+        }
+
+        for k, v := range secondObj {
+            if _, ok := obj[k]; !ok {
+                obj[k] = v
+            }
+        }
+
+        return obj
+    }
+
+    func toIfaceSlice(v interface{}) []interface{} {
+        if v == nil {
+            return nil
+        }
+        return v.([]interface{})
+    }
+
+    func charsToString(v interface{}) string {
+        if v == nil {
+            return ""
+        }
+
+        result := make([]string, len(v.([]interface{})))
+        for i, v := range v.([]interface{}) {
+            result[i] = string(v.([]uint8))
+        }
+
+        return strings.Join(result, "")
+    }
+
+}
+
+/*
+ *  Project: point of entry from pbxproj file
+ */
+Project <- headComment:SingleLineComment? InlineComment? _ obj:Object NewLine _ {
+    proj := newObject()
+    proj["project"] = obj
+
+    if headComment != nil {
+        proj["headComment"] = charsToString(headComment)
+    }
+
+    return proj, nil
+}
+
+Object <- "{" obj:(AssignmentList / EmptyBody) "}" {
+    return obj, nil
+}
+
+EmptyBody <- _ {
+    return newObject(), nil
+}
+
+AssignmentList <- _ _list:((a:Assignment / d:DelimitedSection) _)+ {
+    list := _list.([]interface{})
+    returnObject := list[0].([]interface{})[0].(Object)
+    for _, v := range list {
+        another := v.([]interface{})[0].(Object)
+        returnObject = merge_obj(returnObject, another)
+    }
+
+    return returnObject, nil
+}
+
+
+Assignment <- SimpleAssignment / CommentedAssignment
+
+SimpleAssignment <- id:Identifier _ "=" _ val:Value ";" {
+    result := newObject();
+    result[id.(string)] = val
+    return result, nil
+}
+
+CommentedAssignment <- CommentedAssignment1 / CommentedAssignment2
+
+CommentedAssignment1 <- commentedId:CommentedIdentifier _ "=" _ val:Value ";" {
+    result := newObject()
+    commentKey := (commentedId.(Object)["id"]).(string) + "_comment"
+
+    result[commentedId.(Object)["id"].(string)] = val;
+    result[commentKey] = commentedId.(Object)[commentKey]
+    return result, nil
+}
+
+CommentedAssignment2 <- id:Identifier _ "=" _ commentedVal:CommentedValue ";" {
+    result := newObject()
+    result[id.(string)] = commentedVal.(Object)["value"]
+    result[id.(string) + "_comment"] = commentedVal.(Object)["comment"]
+    return result, nil
+}
+
+CommentedIdentifier <- id:Identifier _ comment:InlineComment {
+    result := newObject()
+    result["id"] = id
+    result[id.(string) + "_comment"] = strings.TrimSpace(comment.(string))
+    return result, nil
+}
+
+CommentedValue <- literal:Value _ comment:InlineComment {
+    result := newObject()
+    result["comment"] = strings.TrimSpace(comment.(string))
+    result["value"] = strings.TrimSpace(literal.(string))
+    return result, nil
+}
+
+InlineComment <- InlineCommentOpen body:[^*]+ InlineCommentClose {
+    return charsToString(body), nil
+}
+
+InlineCommentOpen <- "/*"
+
+InlineCommentClose <- "*/"
+
+DelimitedSection <- begin:DelimitedSectionBegin _ fields:(AssignmentList / EmptyBody) _ DelimitedSectionEnd {
+    section := newObject()
+    section[begin.(Object)["name"].(string)] = fields
+    return section, nil
+}
+
+DelimitedSectionBegin <- "/* Begin " sectionName:Identifier " section */" NewLine {
+    result := newObject()
+    result["name"] = sectionName
+    return result, nil
+}
+
+DelimitedSectionEnd <- "/* End " sectionName:Identifier " section */" NewLine {
+    result := newObject()
+    result["name"] = sectionName
+    return result, nil
+}
+
+Array <- "(" arr:(ArrayBody / EmptyArray ) ")" {
+    return arr, nil
+}
+
+EmptyArray <- _ {
+    return make([]interface{}, 0), nil
+}
+
+ArrayBody <- _ head:ArrayEntry _ tail:ArrayBody? _ {
+    if tail != nil {
+        return append([]interface{}{head}, tail.([]interface{})...), nil
+    } else {
+        return []interface{}{head}, nil
+    }
+}
+
+ArrayEntry <- SimpleArrayEntry / CommentedArrayEntry
+
+SimpleArrayEntry <- val:Value EndArrayEntry {
+    return val, nil
+}
+
+CommentedArrayEntry <- val:Value _ comment:InlineComment EndArrayEntry {
+    result := newObject()
+    result["value"] = strings.TrimSpace(val.(string))
+    result["comment"] = strings.TrimSpace(comment.(string))
+    return result, nil
+}
+
+EndArrayEntry <- "," / _ &")"
+
+Identifier <- IdentifierDigit / QuotedString
+
+IdentifierDigit <- id:[A-Za-z0-9_.]+ {
+    return charsToString(id), nil
+}
+
+Value <- Object / Array / NumberValue / StringValue
+
+NumberValue <- DecimalValue / IntegerValue
+
+DecimalValue <- decimal:(IntegerValue "." IntegerValue) {
+    return strconv.ParseFloat(charsToString(decimal), 32)
+}
+
+IntegerValue <- !Alpha number:Digit+ !NonTerminator {
+    return strconv.ParseInt(charsToString(number), 10, 32)
+}
+
+StringValue <- QuotedString / LiteralString
+
+QuotedString <- DoubleQuote str:QuotedBody DoubleQuote {
+    return "\"" + str.(string) + "\"", nil
+}
+
+QuotedBody <- str:NonQuote+ {
+    return charsToString(str), nil
+}
+
+NonQuote <- EscapedQuote / !DoubleQuote char:. {
+    return char, nil
+}
+
+EscapedQuote <- "\\" DoubleQuote {
+    return "\\\"", nil
+}
+
+LiteralString <- literal:LiteralChar+ {
+    return charsToString(literal), nil
+}
+
+LiteralChar <- !InlineCommentOpen !LineTerminator char:NonTerminator {
+    return char, nil
+}
+
+NonTerminator <- [^;,\n]
+
+SingleLineComment <- "//" _ contents:OneLineString NewLine {
+    return contents, nil
+}
+
+OneLineString <- content:NonLine* {
+    return content, nil
+}
+
+Digit <- [0-9]
+
+Alpha <- [a-zA-Z]
+
+DoubleQuote <- '"'
+
+_ "whitespace" <- whitespace*
+
+whitespace <- NewLine / [\t ]
+
+NonLine <- !NewLine char:Char {
+    return char, nil
+}
+
+LineTerminator <- NewLine / ";"
+
+NewLine <- [\n\r]
+
+Char <- .
+
+EOF <- !.
+
+
