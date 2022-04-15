@@ -1,3 +1,19 @@
+/**
+ Licensed to the Apache Software Foundation (ASF) under one
+ or more contributor license agreements.  See the NOTICE file
+ distributed with this work for additional information
+ regarding copyright ownership.  The ASF licenses this file
+ to you under the Apache License, Version 2.0 (the
+ 'License'); you may not use this file except in compliance
+ with the License.  You may obtain a copy of the License at
+ http://www.apache.org/licenses/LICENSE-2.0
+ Unless required by applicable law or agreed to in writing,
+ software distributed under the License is distributed on an
+ 'AS IS' BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ KIND, either express or implied.  See the License for the
+ specific language governing permissions and limitations
+ under the License.
+ */
 {
     package pegparser
 
@@ -8,11 +24,98 @@
 	    "encoding/json"
     )
 
+    type IterateActionType = int8
+    const (
+        IterateActionContinue IterateActionType = iota
+        IterateActionBreak
+    )
+
     type Object map[string]interface{}
 
-    func newObject() Object {
+    type ObjectWithUUID struct {
+        Object
+        UUID string
+    }
+
+    func NewObject() Object {
         return make(Object)
     }
+
+    func (o Object) Get(key string) interface{} {
+        if value, ok := o[key]; ok {
+            return value
+        }
+        return nil
+    }
+
+    func (o Object) GetObject(key string) Object {
+        if value, ok := o[key]; ok {
+            return value.(Object)
+        }
+        return nil
+    }
+
+    func (o Object) GetString(key string) string {
+        if value, ok := o[key]; ok {
+            switch value.(type) {
+            case string:
+                return value.(string)
+            default:
+                return ""
+            }
+        }
+        return ""
+    }
+
+
+    func (o Object) Set(key string, val interface{}) {
+        if o != nil {
+            o[key] = val
+        }
+    }
+
+    func (o Object) Delete(key string) {
+        delete(o, key)
+    }
+
+    func (o Object) Has(key string) bool {
+        _, ok := o[key]
+        return ok
+    }
+
+    type ApplyFunc = func(key string, val interface{}) IterateActionType
+    type FilterFunc = func(key string, val interface{}) bool
+
+    func (o Object) Foreach(apply ApplyFunc) {
+        for key, val := range o {
+            action := apply(key, val)
+            if action == IterateActionBreak {
+                break
+            }
+        }
+    }
+
+    func (o Object) ForeachWithFilter(apply ApplyFunc, filter FilterFunc) {
+        for key, val := range o {
+            if filter(key, val) {
+                action := apply(key, val)
+                if action == IterateActionBreak {
+                    break
+                }
+            }
+        }
+    }
+
+    func (o Object) Filter(f func(key string, val interface{}) bool) Object {
+        newObj := NewObject()
+        for key, val := range o {
+            if f(key, val) {
+                newObj[key] = val
+            }
+        }
+        return newObj
+    }
+
 
     func merge_obj(obj Object, secondObj Object) Object {
         if obj == nil {
@@ -54,7 +157,7 @@
  *  Project: point of entry from pbxproj file
  */
 Project <- headComment:SingleLineComment? InlineComment? _ obj:Object NewLine _ {
-    proj := newObject()
+    proj := NewObject()
     proj["project"] = obj
 
     if headComment != nil {
@@ -69,7 +172,7 @@ Object <- "{" obj:(AssignmentList / EmptyBody) "}" {
 }
 
 EmptyBody <- _ {
-    return newObject(), nil
+    return NewObject(), nil
 }
 
 AssignmentList <- _ _list:((a:Assignment / d:DelimitedSection) _)+ {
@@ -87,7 +190,7 @@ AssignmentList <- _ _list:((a:Assignment / d:DelimitedSection) _)+ {
 Assignment <- SimpleAssignment / CommentedAssignment
 
 SimpleAssignment <- id:Identifier _ "=" _ val:Value ";" {
-    result := newObject();
+    result := NewObject();
     result[id.(string)] = val
     return result, nil
 }
@@ -95,7 +198,7 @@ SimpleAssignment <- id:Identifier _ "=" _ val:Value ";" {
 CommentedAssignment <- CommentedAssignment1 / CommentedAssignment2
 
 CommentedAssignment1 <- commentedId:CommentedIdentifier _ "=" _ val:Value ";" {
-    result := newObject()
+    result := NewObject()
     commentKey := (commentedId.(Object)["id"]).(string) + "_comment"
 
     result[commentedId.(Object)["id"].(string)] = val;
@@ -104,21 +207,21 @@ CommentedAssignment1 <- commentedId:CommentedIdentifier _ "=" _ val:Value ";" {
 }
 
 CommentedAssignment2 <- id:Identifier _ "=" _ commentedVal:CommentedValue ";" {
-    result := newObject()
+    result := NewObject()
     result[id.(string)] = commentedVal.(Object)["value"]
     result[id.(string) + "_comment"] = commentedVal.(Object)["comment"]
     return result, nil
 }
 
 CommentedIdentifier <- id:Identifier _ comment:InlineComment {
-    result := newObject()
+    result := NewObject()
     result["id"] = id
     result[id.(string) + "_comment"] = strings.TrimSpace(comment.(string))
     return result, nil
 }
 
 CommentedValue <- literal:Value _ comment:InlineComment {
-    result := newObject()
+    result := NewObject()
     result["comment"] = strings.TrimSpace(comment.(string))
     result["value"] = strings.TrimSpace(literal.(string))
     return result, nil
@@ -133,19 +236,19 @@ InlineCommentOpen <- "/*"
 InlineCommentClose <- "*/"
 
 DelimitedSection <- begin:DelimitedSectionBegin _ fields:(AssignmentList / EmptyBody) _ DelimitedSectionEnd {
-    section := newObject()
+    section := NewObject()
     section[begin.(Object)["name"].(string)] = fields
     return section, nil
 }
 
 DelimitedSectionBegin <- "/* Begin " sectionName:Identifier " section */" NewLine {
-    result := newObject()
+    result := NewObject()
     result["name"] = sectionName
     return result, nil
 }
 
 DelimitedSectionEnd <- "/* End " sectionName:Identifier " section */" NewLine {
-    result := newObject()
+    result := NewObject()
     result["name"] = sectionName
     return result, nil
 }
@@ -173,7 +276,7 @@ SimpleArrayEntry <- val:Value EndArrayEntry {
 }
 
 CommentedArrayEntry <- val:Value _ comment:InlineComment EndArrayEntry {
-    result := newObject()
+    result := NewObject()
     result["value"] = strings.TrimSpace(val.(string))
     result["comment"] = strings.TrimSpace(comment.(string))
     return result, nil

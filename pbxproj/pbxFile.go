@@ -111,7 +111,7 @@ func unquoted(text string) string {
 	return unquotedRegex.ReplaceAllString(text, "")
 }
 
-type Options struct {
+type PbxFileOptions struct {
 	LastKnownFileType string
 	CustomFramework   bool
 	DefaultEncoding   int
@@ -121,6 +121,17 @@ type Options struct {
 	CompilerFlags     string
 	Embed             bool
 	Sign              bool
+	Target            string
+	Group             string
+	Plugin            bool
+	VariantGroup      bool
+	Link              bool
+}
+
+func newPbxFileOptions() PbxFileOptions {
+	return PbxFileOptions{
+		Link: true,
+	}
 }
 
 type Setting struct {
@@ -129,81 +140,89 @@ type Setting struct {
 }
 
 type PbxFile struct {
-	basename          string
-	lastKnownFileType string
-	group             string
-	customFramework   bool
-	dirname           string
-	path              string
-	fileEncoding      int
-	explicitFileType  string
-	sourceTree        string
-	defaultEncoding   int
-	includeInIndex    int
-	settings          Setting
+	Basename          string
+	FileRef           string
+	LastKnownFileType string
+	Group             string
+	CustomFramework   bool
+	Dirname           string
+	Path              string
+	FileEncoding      int
+	ExplicitFileType  string
+	SourceTree        string
+	DefaultEncoding   int
+	IncludeInIndex    int
+	Settings          Setting
+	Uuid              string
+	Target            string
+	Models            []*PbxFile
+	CurrentModel      *PbxFile
+	Plugin            bool
 }
 
-func NewPbxFile(filePath string, options Options) *PbxFile {
-	pbxfile := PbxFile{}
-	pbxfile.basename = filepath.Base(filePath)
+func newPbxFile(filePath string, options PbxFileOptions) *PbxFile {
+	pbxfile := PbxFile{
+		IncludeInIndex: 0,
+	}
+	pbxfile.Basename = filepath.Base(filePath)
+	if options.LastKnownFileType != "" {
+		pbxfile.LastKnownFileType = options.LastKnownFileType
+	} else {
+		pbxfile.LastKnownFileType = pbxfile.detectType(filePath)
+	}
 	// for custom frameworks
 	if options.CustomFramework {
-		pbxfile.customFramework = true
-		pbxfile.dirname = filepath.ToSlash(filepath.Dir(filePath))
+		pbxfile.CustomFramework = true
+		pbxfile.Dirname = filepath.ToSlash(filepath.Dir(filePath))
 	}
 
 	if options.DefaultEncoding != 0 {
-		pbxfile.defaultEncoding = options.DefaultEncoding
+		pbxfile.DefaultEncoding = options.DefaultEncoding
 	} else {
-		pbxfile.defaultEncoding = pbxfile.getDefaultEncoding()
+		pbxfile.DefaultEncoding = pbxfile.initDefaultEncoding()
 	}
-	pbxfile.fileEncoding = pbxfile.defaultEncoding
+	pbxfile.FileEncoding = pbxfile.DefaultEncoding
 
 	// When referencing products / build output files
 	if options.ExplicitFileType != "" {
-		pbxfile.explicitFileType = options.ExplicitFileType
-		pbxfile.basename = pbxfile.basename + "." + pbxfile.defaultExtension()
-		pbxfile.path = ""
-		pbxfile.lastKnownFileType = ""
-		pbxfile.group = ""
-		pbxfile.defaultEncoding = DEFAULT_ENCODING_VALUE
+		pbxfile.ExplicitFileType = options.ExplicitFileType
+		pbxfile.Basename = pbxfile.Basename + "." + pbxfile.defaultExtension()
+		pbxfile.Path = ""
+		pbxfile.LastKnownFileType = ""
+		pbxfile.Group = ""
+		pbxfile.DefaultEncoding = DEFAULT_ENCODING_VALUE
 	} else {
-		if options.LastKnownFileType != "" {
-			pbxfile.lastKnownFileType = options.LastKnownFileType
-		} else {
-			pbxfile.lastKnownFileType = pbxfile.detectType(filePath)
-		}
-		pbxfile.group = pbxfile.detectGroup(options)
-		pbxfile.path = filepath.ToSlash(pbxfile.defaultPath(filePath))
+		pbxfile.Group = pbxfile.detectGroup(options)
+		pbxfile.Path = filepath.ToSlash(pbxfile.defaultPath(filePath))
 	}
 
 	if options.SourceTree != "" {
-		pbxfile.sourceTree = options.SourceTree
+		pbxfile.SourceTree = options.SourceTree
 	} else {
-		pbxfile.sourceTree = pbxfile.detectSourcetree()
+		pbxfile.SourceTree = pbxfile.detectSourcetree()
 	}
 
 	if options.Weak {
-		pbxfile.settings = Setting{
+		pbxfile.Settings = Setting{
 			ATTRIBUTES: []string{"Weak"},
 		}
 	}
 
 	if options.CompilerFlags != "" {
-		pbxfile.settings.COMPILER_FLAGS = "\"" + options.CompilerFlags + "\""
+		pbxfile.Settings.COMPILER_FLAGS = "\"" + options.CompilerFlags + "\""
 	}
 
 	if options.Embed && options.Sign {
-		pbxfile.settings.ATTRIBUTES = append(pbxfile.settings.ATTRIBUTES, "CodeSignOnCopy")
+		pbxfile.Settings.ATTRIBUTES = append(pbxfile.Settings.ATTRIBUTES, "CodeSignOnCopy")
 
 	}
 	return &pbxfile
 }
 
 func (pbxfile *PbxFile) defaultExtension() string {
-	filetype := pbxfile.explicitFileType
-	if pbxfile.lastKnownFileType != "" && pbxfile.lastKnownFileType != DEFAULT_FILETYPE {
-		filetype = pbxfile.lastKnownFileType
+	filetype := pbxfile.ExplicitFileType
+	if pbxfile.LastKnownFileType != "" && pbxfile.LastKnownFileType != DEFAULT_FILETYPE {
+		filetype = pbxfile.LastKnownFileType
 	}
 
 	extension, found := EXTENSION_BY_FILETYPE[unquoted(filetype)]
@@ -225,15 +244,15 @@ func (pbxfile *PbxFile) detectType(filePath string) string {
 	return filetype
 }
 
-func (pbxfile *PbxFile) detectGroup(options Options) string {
-	extension := filepath.Ext(pbxfile.basename)[1:]
+func (pbxfile *PbxFile) detectGroup(options PbxFileOptions) string {
+	extension := filepath.Ext(pbxfile.Basename)[1:]
 	if extension == "xcdatamodeld" {
 		return "Sources"
 	}
 
-	filetype := pbxfile.explicitFileType
-	if pbxfile.lastKnownFileType != "" {
-		filetype = pbxfile.lastKnownFileType
+	filetype := pbxfile.ExplicitFileType
+	if pbxfile.LastKnownFileType != "" {
+		filetype = pbxfile.LastKnownFileType
 	}
 
 	if options.CustomFramework && options.Embed {
@@ -247,31 +266,31 @@ func (pbxfile *PbxFile) detectGroup(options Options) string {
 	return groupName
 }
 
-func (pbxfile *PbxFile) getDefaultEncoding() int {
-	filetype := pbxfile.explicitFileType
-	if pbxfile.lastKnownFileType != "" {
-		filetype = pbxfile.lastKnownFileType
+func (pbxfile *PbxFile) initDefaultEncoding() int {
+	filetype := pbxfile.ExplicitFileType
+	if pbxfile.LastKnownFileType != "" {
+		filetype = pbxfile.LastKnownFileType
 	}
 	encoding, ok := ENCODING_BY_FILETYPE[unquoted(filetype)]
-	if !ok {
-		panic("Unknown filetype: " + filetype)
+	if ok {
+		return encoding
 	}
 
-	return encoding
+	return DEFAULT_ENCODING_VALUE
 }
 
 func (pbxfile *PbxFile) detectSourcetree() string {
-	if pbxfile.explicitFileType != "" {
+	if pbxfile.ExplicitFileType != "" {
 		return DEFAULT_PRODUCT_SOURCETREE
 	}
 
-	if pbxfile.customFramework {
+	if pbxfile.CustomFramework {
 		return DEFAULT_SOURCETREE
 	}
 
-	filetype := pbxfile.explicitFileType
-	if pbxfile.lastKnownFileType != "" {
-		filetype = pbxfile.lastKnownFileType
+	filetype := pbxfile.ExplicitFileType
+	if pbxfile.LastKnownFileType != "" {
+		filetype = pbxfile.LastKnownFileType
 	}
 
 	sourcetree, ok := SOURCETREE_BY_FILETYPE[unquoted(filetype)]
@@ -282,13 +301,13 @@ func (pbxfile *PbxFile) detectSourcetree() string {
 }
 
 func (pbxfile *PbxFile) defaultPath(filePath string) string {
-	if pbxfile.customFramework {
+	if pbxfile.CustomFramework {
 		return filePath
 	}
 
-	filetype := pbxfile.explicitFileType
-	if pbxfile.lastKnownFileType != "" {
-		filetype = pbxfile.lastKnownFileType
+	filetype := pbxfile.ExplicitFileType
+	if pbxfile.LastKnownFileType != "" {
+		filetype = pbxfile.LastKnownFileType
 	}
 
 	defaultPath, ok := PATH_BY_FILETYPE[unquoted(filetype)]
@@ -299,7 +318,7 @@ func (pbxfile *PbxFile) defaultPath(filePath string) string {
 }
 
 func (pbxfile *PbxFile) defaultGroup() string {
-	groupName, ok := GROUP_BY_FILETYPE[pbxfile.lastKnownFileType]
+	groupName, ok := GROUP_BY_FILETYPE[pbxfile.LastKnownFileType]
 	if !ok {
 		return DEFAULT_GROUP
 	}
