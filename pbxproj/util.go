@@ -1,12 +1,55 @@
 package pbxproj
 
 import (
+	"reflect"
+	"strconv"
 	"strings"
 
 	"example.com/peg/pegparser"
 )
 
 const COMMENT_KEY_SUFFIX = "_comment"
+
+func isObject(obj interface{}) bool {
+	_, ok := obj.(pegparser.Object)
+	return ok
+}
+func toObject(obj interface{}) pegparser.Object {
+	return obj.(pegparser.Object)
+}
+
+func isArray(obj interface{}) bool {
+	_, ok := obj.([]interface{})
+	return ok
+}
+
+func toArray(obj interface{}) []interface{} {
+	return obj.([]interface{})
+}
+
+func isString(obj interface{}) bool {
+	_, ok := obj.(string)
+	return ok
+}
+func toString(obj interface{}) string {
+	return obj.(string)
+}
+
+func isInt(obj interface{}) bool {
+	switch obj.(type) {
+	case int, int8, int16, int32, int64:
+		return true
+	}
+	return false
+}
+func toIntString(obj interface{}) string {
+	switch obj.(type) {
+	case int, int8, int16, int32, int64:
+		return strconv.FormatInt(reflect.ValueOf(obj).Int(), 10)
+	}
+
+	return ""
+}
 
 func toCommentKey(key string) string {
 	return key + COMMENT_KEY_SUFFIX
@@ -28,22 +71,33 @@ func onlyCommentsFilter(key string, _ interface{}) bool {
 	return isCommentKey(key)
 }
 
-func interfaceToStringSlice(v interface{}) []string {
-	if v == nil {
+func interfaceToStringSlice(val interface{}) []string {
+	if val == nil {
 		return nil
 	}
-	switch v := v.(type) {
+	switch val := val.(type) {
 	case []interface{}:
-		result := make([]string, len(v))
-		for i, v := range v {
+		result := make([]string, len(val))
+		for i, v := range val {
 			result[i] = v.(string)
 		}
 		return result
 	case string:
-		return []string{v}
+		return []string{val}
 	default:
 		return nil
 	}
+}
+
+func stringToInterfaceSlice(val []string) []interface{} {
+	if val == nil {
+		return nil
+	}
+	result := make([]interface{}, len(val))
+	for i, v := range val {
+		result[i] = v
+	}
+	return result
 }
 
 func addToObjectList(obj pegparser.Object, key string, val interface{}) {

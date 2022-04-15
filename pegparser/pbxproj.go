@@ -36,6 +36,10 @@ func NewObject() Object {
 	return make(Object)
 }
 
+func (o Object) IsEmpty() bool {
+	return len(o) == 0
+}
+
 func (o Object) Get(key string) interface{} {
 	if value, ok := o[key]; ok {
 		return value
@@ -82,6 +86,9 @@ type FilterFunc = func(key string, val interface{}) bool
 
 func (o Object) Foreach(apply ApplyFunc) {
 	for key, val := range o {
+		if val == nil {
+			continue
+		}
 		action := apply(key, val)
 		if action == IterateActionBreak {
 			break
@@ -91,6 +98,10 @@ func (o Object) Foreach(apply ApplyFunc) {
 
 func (o Object) ForeachWithFilter(apply ApplyFunc, filter FilterFunc) {
 	for key, val := range o {
+		if val == nil {
+			continue
+		}
+
 		if filter(key, val) {
 			action := apply(key, val)
 			if action == IterateActionBreak {

@@ -41,6 +41,10 @@
         return make(Object)
     }
 
+    func (o Object) IsEmpty() bool {
+        return len(o) == 0
+    }
+
     func (o Object) Get(key string) interface{} {
         if value, ok := o[key]; ok {
             return value

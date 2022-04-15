@@ -41,4 +41,7 @@ func main() {
 	}
 
 	dumpToFile("after.json")
+
+	writer := pbxproj.NewPbxWriter(&project)
+	writer.Write("projectAfter.pbxproj")
 }

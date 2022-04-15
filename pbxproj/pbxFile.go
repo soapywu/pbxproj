@@ -20,6 +20,8 @@ package pbxproj
 import (
 	"path/filepath"
 	"regexp"
+
+	"example.com/peg/pegparser"
 )
 
 const (
@@ -152,7 +154,7 @@ type PbxFile struct {
 	SourceTree        string
 	DefaultEncoding   int
 	IncludeInIndex    int
-	Settings          Setting
+	Settings          pegparser.Object
 	Uuid              string
 	Target            string
 	Models            []*PbxFile
@@ -203,18 +205,24 @@ func newPbxFile(filePath string, options PbxFileOptions) *PbxFile {
 	}
 
 	if options.Weak {
-		pbxfile.Settings = Setting{
-			ATTRIBUTES: []string{"Weak"},
+		if pbxfile.Settings == nil {
+			pbxfile.Settings = pegparser.NewObject()
 		}
+		addToObjectList(pbxfile.Settings, "ATTRIBUTES", "Weak")
 	}
 
 	if options.CompilerFlags != "" {
-		pbxfile.Settings.COMPILER_FLAGS = "\"" + options.CompilerFlags + "\""
+		if pbxfile.Settings == nil {
+			pbxfile.Settings = pegparser.NewObject()
+		}
+		pbxfile.Settings.Set("COMPILER_FLAGS", "\""+options.CompilerFlags+"\"")
 	}
 
 	if options.Embed && options.Sign {
-		pbxfile.Settings.ATTRIBUTES = append(pbxfile.Settings.ATTRIBUTES, "CodeSignOnCopy")
-
+		if pbxfile.Settings == nil {
+			pbxfile.Settings = pegparser.NewObject()
+		}
+		addToObjectList(pbxfile.Settings, "ATTRIBUTES", "CodeSignOnCopy")
 	}
 	return &pbxfile
 }

@@ -76,6 +76,10 @@ func NewPbxProject(filename string) PbxProject {
 	}
 }
 
+func (p *PbxProject) Contents() pegparser.Object {
+	return p.pbxContents
+}
+
 func (p *PbxProject) Parse() error {
 	data, err := ioutil.ReadFile(p.filePath)
 	if err != nil {
@@ -97,7 +101,7 @@ func (p *PbxProject) Dump(writer io.Writer) error {
 	jsonEncoder := json.NewEncoder(buffer)
 	jsonEncoder.SetEscapeHTML(false)
 	jsonEncoder.SetIndent("", "  ")
-	jsonEncoder.Encode(p.pbxContents)
+	_ = jsonEncoder.Encode(p.Contents())
 	_, _ = writer.Write(buffer.Bytes())
 	return nil
 }
