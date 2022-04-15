@@ -205,21 +205,21 @@ func newPbxFile(filePath string, options PbxFileOptions) *PbxFile {
 	}
 
 	if options.Weak {
-		if pbxfile.Settings == nil {
+		if pbxfile.Settings.IsEmpty() {
 			pbxfile.Settings = pegparser.NewObject()
 		}
 		addToObjectList(pbxfile.Settings, "ATTRIBUTES", "Weak")
 	}
 
 	if options.CompilerFlags != "" {
-		if pbxfile.Settings == nil {
+		if pbxfile.Settings.IsEmpty() {
 			pbxfile.Settings = pegparser.NewObject()
 		}
 		pbxfile.Settings.Set("COMPILER_FLAGS", "\""+options.CompilerFlags+"\"")
 	}
 
 	if options.Embed && options.Sign {
-		if pbxfile.Settings == nil {
+		if pbxfile.Settings.IsEmpty() {
 			pbxfile.Settings = pegparser.NewObject()
 		}
 		addToObjectList(pbxfile.Settings, "ATTRIBUTES", "CodeSignOnCopy")
