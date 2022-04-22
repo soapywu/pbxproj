@@ -63,16 +63,14 @@ type PbxProject struct {
 	pbxTargetDependencySection     pegparser.Object
 	pbxContainerItemProxySection   pegparser.Object
 	uuids                          map[string]struct{}
-	pbxFileReferences              map[string]struct{}
-	pbxFileNoCommentReferences     map[string]*PbxFile
+	pbxFileReferences              map[string]*PbxFile
 }
 
 func NewPbxProject(filename string) PbxProject {
 	return PbxProject{
-		filePath:                   filename,
-		uuids:                      make(map[string]struct{}),
-		pbxFileReferences:          make(map[string]struct{}),
-		pbxFileNoCommentReferences: make(map[string]*PbxFile),
+		filePath:          filename,
+		uuids:             make(map[string]struct{}),
+		pbxFileReferences: make(map[string]*PbxFile),
 	}
 }
 
@@ -93,6 +91,8 @@ func (p *PbxProject) Parse() error {
 	p.pbxContents = contents.(pegparser.Object)
 	p.initSections()
 	p.buildExistUuids()
+	p.initFileReference()
+
 	return nil
 }
 
@@ -104,6 +104,18 @@ func (p *PbxProject) Dump(writer io.Writer) error {
 	_ = jsonEncoder.Encode(p.Contents())
 	_, _ = writer.Write(buffer.Bytes())
 	return nil
+}
+
+func (p *PbxProject) initFileReference() {
+	files := make(map[string]*PbxFile)
+	p.pbxFileReferenceSection.ForeachWithFilter(func(_ string, v interface{}) pegparser.IterateActionType {
+		obj := v.(pegparser.Object)
+		filePath := obj.GetString("path")
+		files[filePath] = fromObject(obj)
+		return pegparser.IterateActionContinue
+	}, nonCommentsFilter)
+
+	p.pbxFileReferences = files
 }
 
 func (p *PbxProject) initSections() {
@@ -130,6 +142,7 @@ func (p *PbxProject) initSections() {
 		p.pbxObjectSection.Set("XCConfigurationList", pbxXCConfigurationListSection)
 	}
 	p.pbxXCConfigurationListSection = pbxXCConfigurationListSection
+
 }
 
 func (p *PbxProject) buildExistUuids() {
@@ -616,6 +629,7 @@ func (p *PbxProject) addToPbxNativeTargetSection(uuid string, target pegparser.O
 func (p *PbxProject) addToPbxFileReferenceSection(pbxfile *PbxFile) {
 	p.pbxFileReferenceSection.Set(pbxfile.FileRef, newPbxFileReferenceObj(pbxfile))
 	p.pbxFileReferenceSection.Set(toCommentKey(pbxfile.FileRef), pbxFileReferenceComment(pbxfile))
+	p.pbxFileReferences[pbxfile.Path] = pbxfile
 }
 
 func (p *PbxProject) removeFromPbxFileReferenceSection(pbxfile *PbxFile) {
@@ -1190,11 +1204,11 @@ func (p *PbxProject) productName() (name string) {
 
 // // check if file is present
 func (p *PbxProject) getFile(filePath string) *PbxFile {
-	pbxfile, ok := p.pbxFileNoCommentReferences[filePath]
+	pbxfile, ok := p.pbxFileReferences[filePath]
 	if ok {
 		return pbxfile
 	}
-	pbxfile, ok = p.pbxFileNoCommentReferences[`"`+filePath+`"`]
+	pbxfile, ok = p.pbxFileReferences[`"`+filePath+`"`]
 	if ok {
 		return pbxfile
 	}
@@ -1364,7 +1378,7 @@ func newPbxFileReferenceObj(pbxfile *PbxFile) pegparser.Object {
 		pegparser.NewObjectItem("name", `"`+pbxfile.Basename+`"`),
 		pegparser.NewObjectItem("fileEncoding", pbxfile.FileEncoding),
 		pegparser.NewObjectItem("lastKnownFileType", pbxfile.LastKnownFileType),
-		pegparser.NewObjectItem("path", `"`+filepath.ToSlash(pbxfile.Path)+`"`),
+		pegparser.NewObjectItem("path", filepath.ToSlash(pbxfile.Path)),
 		pegparser.NewObjectItem("sourceTree", pbxfile.SourceTree),
 		pegparser.NewObjectItem("explicitFileType", pbxfile.ExplicitFileType),
 		pegparser.NewObjectItem("includeInIndex", pbxfile.IncludeInIndex),

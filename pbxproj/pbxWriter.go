@@ -133,14 +133,18 @@ func (w *PbxWriter) writeProject() {
 			w.write("};\n")
 		} else if isString(val) {
 			str := toString(val)
-			if w.omitEmptyValues && str == "" {
-				return pegparser.IterateActionContinue
-			} else {
-				if cmt != "" {
-					w.write("%s = %s /* %s */;\n", key, str, cmt)
+			if str == "" {
+				if w.omitEmptyValues {
+					return pegparser.IterateActionContinue
 				} else {
-					w.write("%s = %s;\n", key, str)
+					str = `""`
 				}
+			}
+
+			if cmt != "" {
+				w.write("%s = %s /* %s */;\n", key, str, cmt)
+			} else {
+				w.write("%s = %s;\n", key, str)
 			}
 		} else if isInt(val) {
 			if cmt != "" {
@@ -173,9 +177,14 @@ func (w PbxWriter) writeObject(obj pegparser.Object) {
 			w.write("};\n")
 		} else if isString(val) {
 			str := toString(val)
-			if w.omitEmptyValues && str == "" {
-				return pegparser.IterateActionContinue
-			} else if cmt != "" {
+			if str == "" {
+				if w.omitEmptyValues {
+					return pegparser.IterateActionContinue
+				} else {
+					str = `""`
+				}
+			}
+			if cmt != "" {
 				w.write("%s = %s /* %s */;\n", key, str, cmt)
 			} else {
 				w.write("%s = %s;\n", key, str)
@@ -298,8 +307,12 @@ func (w PbxWriter) writeInlineObjectHelp(buffer *[]string, name string, desc str
 			w.writeInlineObjectHelp(&output, key, cmt, val.(pegparser.Object))
 		} else if isString(val) {
 			value := val.(string)
-			if value == "" && w.omitEmptyValues {
-				return pegparser.IterateActionContinue
+			if value == "" {
+				if w.omitEmptyValues {
+					return pegparser.IterateActionContinue
+				} else {
+					value = `""`
+				}
 			}
 			if cmt != "" {
 				output = append(output, fmt.Sprintf("%s = %s /* %s */; ", key, value, cmt))

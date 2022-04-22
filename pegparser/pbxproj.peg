@@ -18,10 +18,11 @@
     package pegparser
 
     import (
-        "strings"
+        "encoding/json"
         "errors"
+        "reflect"
         "strconv"
-	    "encoding/json"
+        "strings"
     )
 
 
@@ -104,6 +105,16 @@ func (o Object) MarshalJSON() ([]byte, error) {
             }
         }
         return ""
+    }
+
+    func (o Object) GetInt(key string) int {
+        if value, ok := o.Get(key); ok {
+            switch value.(type) {
+            case int, int8, int16, int32, int64:
+                return int(reflect.ValueOf(value).Int())
+            }
+        }
+        return 0
     }
 
     type ApplyFunc = func(key string, val interface{}) IterateActionType

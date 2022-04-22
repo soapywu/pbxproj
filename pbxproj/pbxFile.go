@@ -127,6 +127,7 @@ type PbxFileOptions struct {
 	Group             string
 	Plugin            bool
 	VariantGroup      bool
+	IncludeInIndex    int
 	Link              bool
 }
 
@@ -164,7 +165,7 @@ type PbxFile struct {
 
 func newPbxFile(filePath string, options PbxFileOptions) *PbxFile {
 	pbxfile := PbxFile{
-		IncludeInIndex: 0,
+		IncludeInIndex: options.IncludeInIndex,
 	}
 	pbxfile.Basename = filepath.Base(filePath)
 	if options.LastKnownFileType != "" {
@@ -227,6 +228,24 @@ func newPbxFile(filePath string, options PbxFileOptions) *PbxFile {
 	return &pbxfile
 }
 
+func fromObject(obj pegparser.Object) *PbxFile {
+	option := PbxFileOptions{
+		LastKnownFileType: obj.GetString("lastKnownFileType"),
+		DefaultEncoding:   obj.GetInt("fileEncoding"),
+		ExplicitFileType:  obj.GetString("explicitFileType"),
+		SourceTree:        obj.GetString("sourceTree"),
+		IncludeInIndex:    obj.GetInt("includeInIndex"),
+		Link:              true,
+	}
+	filePath := obj.GetString("path")
+	settings := obj.GetObject("settings")
+	if !settings.IsEmpty() {
+		option.CompilerFlags = unquoted(settings.GetString("COMPILER_FLAGS"))
+	}
+
+	return newPbxFile(filePath, option)
+}
+
 func (pbxfile *PbxFile) defaultExtension() string {
 	filetype := pbxfile.ExplicitFileType
 	if pbxfile.LastKnownFileType != "" && pbxfile.LastKnownFileType != DEFAULT_FILETYPE {
@@ -253,7 +272,7 @@ func (pbxfile *PbxFile) detectType(filePath string) string {
 }
 
 func (pbxfile *PbxFile) detectGroup(options PbxFileOptions) string {
-	extension := filepath.Ext(pbxfile.Basename)[1:]
+	extension := filepath.Ext(pbxfile.Basename)
 	if extension == "xcdatamodeld" {
 		return "Sources"
 	}

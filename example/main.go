@@ -4,7 +4,7 @@ import (
 	"log"
 	"os"
 
-	"github.com/soapy/pbxproj/pbxproj"
+	"github.com/soapywu/pbxproj/pbxproj"
 )
 
 func main() {
@@ -15,12 +15,12 @@ func main() {
 		log.Fatal(err)
 	}
 	dumpToFile := func(name string) {
-		// file, err := os.OpenFile(name, os.O_CREATE|os.O_WRONLY, 0644)
-		// if err != nil {
-		// 	log.Fatal(err)
-		// }
+		file, err := os.OpenFile(name, os.O_CREATE|os.O_WRONLY, 0644)
+		if err != nil {
+			log.Fatal(err)
+		}
 
-		err = project.Dump(os.Stdout)
+		err = project.Dump(file)
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -29,19 +29,18 @@ func main() {
 	dumpToFile("OriginalProject.json")
 	err = project.AddHeaderFile("foo.h")
 	if err != nil {
-		log.Fatal(err)
+		log.Println(err)
 	}
 	err = project.AddSourceFile("foo.m")
 	if err != nil {
-		log.Fatal(err)
+		log.Println(err)
 	}
 	err = project.AddFramework("FooKit.framework")
 	if err != nil {
-		log.Fatal(err)
+		log.Println(err)
 	}
 
 	dumpToFile("ModifiedProject.json")
 
-	writer := pbxproj.NewPbxWriter(&project)
-	writer.Write("ModifiedProject.pbxproj")
+	_ = pbxproj.NewPbxWriter(&project).Write("new" + projectPath)
 }
