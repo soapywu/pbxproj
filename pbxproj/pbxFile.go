@@ -21,7 +21,7 @@ import (
 	"path/filepath"
 	"regexp"
 
-	"github.com/soapy/pbxproj/pegparser"
+	"github.com/soapywu/pbxproj/pegparser"
 )
 
 const (

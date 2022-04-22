@@ -1,4 +1,4 @@
-module github.com/soapy/pbxproj
+module github.com/soapywu/pbxproj
 
 go 1.17
 

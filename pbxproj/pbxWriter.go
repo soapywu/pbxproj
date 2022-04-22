@@ -22,7 +22,7 @@ import (
 	"reflect"
 	"strings"
 
-	"github.com/soapy/pbxproj/pegparser"
+	"github.com/soapywu/pbxproj/pegparser"
 )
 
 const (

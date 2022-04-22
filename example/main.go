@@ -15,12 +15,12 @@ func main() {
 		log.Fatal(err)
 	}
 	dumpToFile := func(name string) {
-		file, err := os.OpenFile(name, os.O_CREATE|os.O_WRONLY, 0644)
-		if err != nil {
-			log.Fatal(err)
-		}
+		// file, err := os.OpenFile(name, os.O_CREATE|os.O_WRONLY, 0644)
+		// if err != nil {
+		// 	log.Fatal(err)
+		// }
 
-		err = project.Dump(file)
+		err = project.Dump(os.Stdout)
 		if err != nil {
 			log.Fatal(err)
 		}

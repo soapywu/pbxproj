@@ -29,7 +29,7 @@ import (
 	"strings"
 
 	"github.com/gofrs/uuid"
-	"github.com/soapy/pbxproj/pegparser"
+	"github.com/soapywu/pbxproj/pegparser"
 )
 
 type CommentValue struct {
