@@ -29,14 +29,14 @@ It's heavily mimicked and inspired by [cordova-node-xcode](https://github.com/ap
     pbxproj.NewPbxWriter(&project).Write("project.pbxproj")
 ```
 # Working on the parser
-The .pbxProj parser(pegparser/pbxproj.go) is generated from the grammar in pbxproj.peg(pegparser/pbxproj.peg) by [pigeon](https://github.com/mna/pigeon).
+The .pbxProj parser(pegparser/pbxproj.go) is generated from the grammar in pegparser/pbxproj.peg by [pigeon](https://github.com/mna/pigeon).
 
 If there's a problem parsing, you need to edit the grammar in pbxproj.peg and regenerate the parser.
 ```shell
 # install the pigeon tool
 $ go get -u github.com/mna/pigeon
 
-$ pigeon -o pbxproj/pbxproj.go pbxproj/pbxproj.peg
+$ pigeon -o pegparser/pbxproj.go pegparser/pbxproj.peg
 ```
 
 # License
