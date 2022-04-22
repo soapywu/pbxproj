@@ -850,7 +850,7 @@ func (p *PbxProject) AddBuildPhase(filePathsArray []string, buildPhaseType, comm
 	buildPhase := pegparser.NewObjectWithData([]pegparser.SliceItem{
 		pegparser.NewObjectItem("isa", buildPhaseType),
 		pegparser.NewObjectItem("buildActionMask", 2147483647),
-		pegparser.NewObjectItem("files", []pegparser.Object{}),
+		pegparser.NewObjectItem("files", []interface{}{}),
 		pegparser.NewObjectItem("runOnlyForDeploymentPostprocessing", 0),
 	})
 
@@ -1352,7 +1352,9 @@ func pbxBuildFileObj(pbxfile *PbxFile) pegparser.Object {
 	obj.Set("isa", "PBXBuildFile")
 	obj.Set("fileRef", pbxfile.FileRef)
 	obj.Set(toCommentKey("fileRef"), pbxfile.Basename)
-	obj.Set("settings", pbxfile.Settings)
+	if !pbxfile.Settings.IsEmpty() {
+		obj.Set("settings", pbxfile.Settings)
+	}
 	return obj
 }
 
@@ -1360,10 +1362,10 @@ func newPbxFileReferenceObj(pbxfile *PbxFile) pegparser.Object {
 	return pegparser.NewObjectWithData([]pegparser.SliceItem{
 		pegparser.NewObjectItem("isa", "PBXFileReference"),
 		pegparser.NewObjectItem("name", `"`+pbxfile.Basename+`"`),
-		pegparser.NewObjectItem("path", `"`+filepath.ToSlash(pbxfile.Path)+`"`),
-		pegparser.NewObjectItem("sourceTree", pbxfile.SourceTree),
 		pegparser.NewObjectItem("fileEncoding", pbxfile.FileEncoding),
 		pegparser.NewObjectItem("lastKnownFileType", pbxfile.LastKnownFileType),
+		pegparser.NewObjectItem("path", `"`+filepath.ToSlash(pbxfile.Path)+`"`),
+		pegparser.NewObjectItem("sourceTree", pbxfile.SourceTree),
 		pegparser.NewObjectItem("explicitFileType", pbxfile.ExplicitFileType),
 		pegparser.NewObjectItem("includeInIndex", pbxfile.IncludeInIndex),
 	})
