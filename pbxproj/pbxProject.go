@@ -38,10 +38,10 @@ type CommentValue struct {
 }
 
 func (c CommentValue) ToObject() pegparser.Object {
-	return pegparser.Object{
-		"value":   c.Value,
-		"comment": c.Comment,
-	}
+	return pegparser.NewObjectWithData([]pegparser.SliceItem{
+		pegparser.NewObjectItem("value", c.Value),
+		pegparser.NewObjectItem("comment", c.Comment),
+	})
 }
 
 type PbxProjectWriterOption struct {
@@ -118,14 +118,14 @@ func (p *PbxProject) initSections() {
 	p.pbxTargetDependencySection = p.pbxObjectSection.GetObject("PBXTargetDependency")     // @fixme if not exist create when add
 	p.pbxContainerItemProxySection = p.pbxObjectSection.GetObject("PBXContainerItemProxy") // @fixme if not exist create when add
 	xcVersionGroupSection := p.pbxObjectSection.GetObject("XCVersionGroup")
-	if xcVersionGroupSection == nil {
+	if xcVersionGroupSection.IsEmpty() {
 		xcVersionGroupSection = pegparser.NewObject()
 		p.pbxObjectSection.Set("XCVersionGroup", xcVersionGroupSection)
 	}
 	p.xcVersionGroupSection = xcVersionGroupSection
 
 	pbxXCConfigurationListSection := p.pbxObjectSection.GetObject("XCConfigurationList")
-	if pbxXCConfigurationListSection == nil {
+	if pbxXCConfigurationListSection.IsEmpty() {
 		pbxXCConfigurationListSection = pegparser.NewObject()
 		p.pbxObjectSection.Set("XCConfigurationList", pbxXCConfigurationListSection)
 	}
@@ -330,9 +330,9 @@ func (p *PbxProject) AddResourceFile(filePath string, params ...interface{}) err
 	if !options.Plugin {
 		p.addToPbxFileReferenceSection(pbxfile) // PBXFileReference
 		if group != "" {
-			if p.getPBXGroupByKey(group) != nil {
+			if !p.getPBXGroupByKey(group).IsEmpty() {
 				p.addToPbxGroup(pbxfile, group) //Group other than Resources (i.e. "splash")
-			} else if p.getPBXVariantGroupByKey(group) != nil {
+			} else if !p.getPBXVariantGroupByKey(group).IsEmpty() {
 				p.addToPbxVariantGroup(pbxfile, group) // PBXVariantGroup
 			}
 		} else {
@@ -354,9 +354,9 @@ func (p *PbxProject) RemoveResourceFile(filePath string, params ...interface{}) 
 	p.removeFromPbxBuildFileSection(pbxfile)     // PBXBuildFile
 	p.removeFromPbxFileReferenceSection(pbxfile) // PBXFileReference
 	if group != "" {
-		if p.getPBXGroupByKey(group) != nil {
+		if !p.getPBXGroupByKey(group).IsEmpty() {
 			p.removeFromPbxGroup(pbxfile, group) //Group other than Resources (i.e. "splash")
-		} else if p.getPBXVariantGroupByKey(group) != nil {
+		} else if !p.getPBXVariantGroupByKey(group).IsEmpty() {
 			p.removeFromPbxVariantGroup(pbxfile, group) // PBXVariantGroup
 		}
 	} else {
@@ -523,12 +523,12 @@ type FileReferenceAndBase struct {
 
 func (p *PbxProject) AddPbxGroup(filePathsArray []string, name, path, sourceTree string) {
 	pbxGroupUuid := p.generateUuid()
-	pbxGroup := pegparser.Object{
-		"isa":        "PBXGroup",
-		"children":   []interface{}{},
-		"name":       name,
-		"sourceTree": sourceTree,
-	}
+	pbxGroup := pegparser.NewObjectWithData([]pegparser.SliceItem{
+		pegparser.NewObjectItem("isa", "PBXGroup"),
+		pegparser.NewObjectItem("children", []interface{}{}),
+		pegparser.NewObjectItem("name", name),
+		pegparser.NewObjectItem("sourceTree", sourceTree),
+	})
 	if path != "" {
 		pbxGroup.Set("path", path)
 	}
@@ -582,7 +582,7 @@ func (p *PbxProject) AddPbxGroup(filePathsArray []string, name, path, sourceTree
 		}.ToObject())
 	}
 
-	if p.pbxGroupSection != nil {
+	if !p.pbxGroupSection.IsEmpty() {
 		p.pbxGroupSection.Set(pbxGroupUuid, pbxGroup)
 		p.pbxGroupSection.Set(toCommentKey(pbxGroupUuid), name)
 	}
@@ -647,15 +647,16 @@ func (p *PbxProject) addToXcVersionGroupSection(pbxfile *PbxFile) error {
 	}
 
 	if !p.xcVersionGroupSection.Has(pbxfile.FileRef) {
-		p.xcVersionGroupSection.Set(pbxfile.FileRef, pegparser.Object{
-			"isa":              "XCVersionGroup",
-			"children":         fileRefs,
-			"currentVersion":   pbxfile.CurrentModel.FileRef,
-			"name":             filepath.Base(pbxfile.Path),
-			"path":             pbxfile.Path,
-			"sourceTree":       `"<group>"`,
-			"versionGroupType": "wrapper.xcdatamodel",
-		})
+		p.xcVersionGroupSection.Set(pbxfile.FileRef, pegparser.NewObjectWithData([]pegparser.ObjectItem{
+			pegparser.NewObjectItem("isa", "XCVersionGroup"),
+			pegparser.NewObjectItem("children", fileRefs),
+			pegparser.NewObjectItem("currentVersion", pbxfile.CurrentModel.FileRef),
+			pegparser.NewObjectItem("name", filepath.Base(pbxfile.Path)),
+			pegparser.NewObjectItem("path", pbxfile.Path),
+			pegparser.NewObjectItem("sourceTree", `"<group>"`),
+			pegparser.NewObjectItem("versionGroupType", "wrapper.xcdatamodel"),
+		}))
+
 		p.xcVersionGroupSection.Set(toCommentKey(pbxfile.FileRef), filepath.Base(pbxfile.Path))
 	}
 	return nil
@@ -663,7 +664,7 @@ func (p *PbxProject) addToXcVersionGroupSection(pbxfile *PbxFile) error {
 
 func (p *PbxProject) addToPbxGroup(pbxfile *PbxFile, groupName string) {
 	group := p.pbxGroupByName(groupName)
-	if group == nil {
+	if group.IsEmpty() {
 		p.AddPbxGroup([]string{pbxfile.Path}, groupName, "", "")
 	} else {
 		addToObjectList(group, "children", pbxGroupChild(pbxfile))
@@ -672,7 +673,7 @@ func (p *PbxProject) addToPbxGroup(pbxfile *PbxFile, groupName string) {
 
 func (p *PbxProject) removeFromPbxGroup(pbxfile *PbxFile, groupName string) {
 	group := p.pbxGroupByName(groupName)
-	if group == nil {
+	if group.IsEmpty() {
 		return
 	}
 
@@ -761,12 +762,11 @@ func (p *PbxProject) addXCConfigurationList(configurationObjectsArray []pegparse
 	xcConfigurationListUuid := p.generateUuid()
 	buildConfigurations := make([]pegparser.Object, 0)
 
-	xcConfigurationList := pegparser.Object{
-		"isa":                           "XCConfigurationList",
-		"defaultConfigurationIsVisible": 0,
-		"defaultConfigurationName":      defaultConfigurationName,
-	}
-
+	xcConfigurationList := pegparser.NewObjectWithData([]pegparser.SliceItem{
+		pegparser.NewObjectItem("isa", "XCConfigurationList"),
+		pegparser.NewObjectItem("defaultConfigurationIsVisible", 0),
+		pegparser.NewObjectItem("defaultConfigurationName", defaultConfigurationName),
+	})
 	for _, configuration := range configurationObjectsArray {
 		configurationUuid := p.generateUuid()
 		p.pbxXCBuildConfigurationSection.Set(configurationUuid, configuration)
@@ -804,28 +804,29 @@ func (p *PbxProject) AddTargetDependency(target string, dependencyTargets []stri
 		}
 	}
 	targetObj := p.pbxNativeTargetSection.GetObject(target)
-	if targetObj == nil {
+	if targetObj.IsEmpty() {
 		return
 	}
 
 	for _, dependencyTargetUuid := range dependencyTargets {
 		targetDependencyUuid := p.generateUuid()
 		itemProxyUuid := p.generateUuid()
-		itemProxy := pegparser.Object{
-			"isa":                           "PBXContainerItemProxy",
-			"containerPortal":               p.topProjectSection.GetString("rootObject"),
-			toCommentKey("containerPortal"): p.topProjectSection.GetString(toCommentKey("rootObject")),
-			"proxyType":                     1,
-			"remoteGlobalIDString":          dependencyTargetUuid,
-			"remoteInfo":                    p.pbxNativeTargetSection.GetObject(dependencyTargetUuid).GetString("name"),
-		}
-		targetDependency := pegparser.Object{
-			"isa":                       "PBXTargetDependency",
-			"target":                    dependencyTargetUuid,
-			toCommentKey("target"):      p.pbxNativeTargetSection.GetString(toCommentKey(dependencyTargetUuid)),
-			"targetProxy":               itemProxyUuid,
-			toCommentKey("targetProxy"): "PBXContainerItemProxy",
-		}
+		itemProxy := pegparser.NewObjectWithData([]pegparser.SliceItem{
+			pegparser.NewObjectItem("isa", "PBXContainerItemProxy"),
+			pegparser.NewObjectItem("containerPortal", p.topProjectSection.GetString("rootObject")),
+			pegparser.NewObjectItem(toCommentKey("containerPortal"), p.topProjectSection.GetString(toCommentKey("rootObject"))),
+			pegparser.NewObjectItem("proxyType", 1),
+			pegparser.NewObjectItem("remoteGlobalIDString", dependencyTargetUuid),
+			pegparser.NewObjectItem("remoteInfo", p.pbxNativeTargetSection.GetObject(dependencyTargetUuid).GetString("name")),
+		})
+
+		targetDependency := pegparser.NewObjectWithData([]pegparser.SliceItem{
+			pegparser.NewObjectItem("isa", "PBXTargetDependency"),
+			pegparser.NewObjectItem("target", dependencyTargetUuid),
+			pegparser.NewObjectItem(toCommentKey("target"), p.pbxNativeTargetSection.GetString(toCommentKey(dependencyTargetUuid))),
+			pegparser.NewObjectItem("targetProxy", itemProxyUuid),
+			pegparser.NewObjectItem(toCommentKey("targetProxy"), "PBXContainerItemProxy"),
+		})
 
 		p.pbxContainerItemProxySection.Set(itemProxyUuid, itemProxy)
 		p.pbxContainerItemProxySection.Set(toCommentKey(itemProxyUuid), "pbxContainerItemProxy")
@@ -846,12 +847,12 @@ func (p *PbxProject) AddBuildPhase(filePathsArray []string, buildPhaseType, comm
 	}
 	commentKey := toCommentKey(buildPhaseUuid)
 
-	buildPhase := pegparser.Object{
-		"isa":                                buildPhaseType,
-		"buildActionMask":                    2147483647,
-		"files":                              []pegparser.Object{},
-		"runOnlyForDeploymentPostprocessing": 0,
-	}
+	buildPhase := pegparser.NewObjectWithData([]pegparser.SliceItem{
+		pegparser.NewObjectItem("isa", buildPhaseType),
+		pegparser.NewObjectItem("buildActionMask", 2147483647),
+		pegparser.NewObjectItem("files", []interface{}{}),
+		pegparser.NewObjectItem("runOnlyForDeploymentPostprocessing", 0),
+	})
 
 	filePathToBuildFile := map[string]*PbxFile{}
 	if buildPhaseType == "PBXCopyFilesBuildPhase" {
@@ -871,7 +872,7 @@ func (p *PbxProject) AddBuildPhase(filePathsArray []string, buildPhaseType, comm
 	}
 
 	buildPhaseSection := p.pbxObjectSection.GetObject(buildPhaseType)
-	if buildPhaseSection == nil {
+	if buildPhaseSection.IsEmpty() {
 		buildPhaseSection = pegparser.NewObject()
 		p.pbxObjectSection.Set(buildPhaseType, buildPhaseSection)
 	}
@@ -892,7 +893,7 @@ func (p *PbxProject) AddBuildPhase(filePathsArray []string, buildPhaseType, comm
 		buildFileKey := fromCommentKey(key)
 		buildFile := p.pbxBuildFileSection.GetObject(buildFileKey)
 		fileReference := p.pbxFileReferenceSection.GetObject(buildFile.GetString("fileRef"))
-		if fileReference == nil {
+		if fileReference.IsEmpty() {
 			return pegparser.IterateActionContinue
 		}
 		filePath := fileReference.GetString("path")
@@ -930,6 +931,7 @@ func (p *PbxProject) AddBuildPhase(filePathsArray []string, buildPhaseType, comm
 }
 
 func (p *PbxProject) pbxGroupByName(name string) (obj pegparser.Object) {
+	obj = pegparser.NewObject()
 	p.pbxGroupSection.ForeachWithFilter(func(key string, value interface{}) pegparser.IterateActionType {
 		if value.(string) == name {
 			obj = p.pbxGroupSection.GetObject(fromCommentKey(key))
@@ -957,6 +959,7 @@ func (p *PbxProject) findTargetKey(name string) (targetKey string) {
 }
 
 func (p *PbxProject) pbxItemByComment(name, pbxSectionName string) (obj pegparser.Object) {
+	obj = pegparser.NewObject()
 	section := p.pbxObjectSection.GetObject(pbxSectionName)
 	section.ForeachWithFilter(func(key string, value interface{}) pegparser.IterateActionType {
 		if value.(string) == name {
@@ -991,11 +994,11 @@ func (p *PbxProject) buildPhase(group, target string) string {
 	}
 
 	nativeTarget := p.pbxNativeTargetSection.GetObject(target)
-	if nativeTarget == nil {
+	if nativeTarget.IsEmpty() {
 		return ""
 	}
 
-	buildPhases := nativeTarget.Get("buildPhases")
+	buildPhases := nativeTarget.ForceGet("buildPhases")
 	if buildPhases == nil {
 		return ""
 	}
@@ -1010,8 +1013,9 @@ func (p *PbxProject) buildPhase(group, target string) string {
 }
 
 func (p *PbxProject) buildPhaseObject(name, group, target string) (obj pegparser.Object) {
+	obj = pegparser.NewObject()
 	section := p.pbxObjectSection.GetObject(name)
-	if section == nil {
+	if section.IsEmpty() {
 		return
 	}
 	buildPhase := p.buildPhase(group, target)
@@ -1054,11 +1058,11 @@ func (p *PbxProject) UpdateBuildProperty(prop, value, build, targetName string) 
 	validConfigs := make(map[string]struct{})
 	if targetName != "" {
 		target := p.pbxTargetByName(targetName)
-		if target != nil {
+		if !target.IsEmpty() {
 			targetBuildConfigs := target.GetString("buildConfigurationList")
 			p.pbxXCConfigurationListSection.ForeachWithFilter(func(configName string, val interface{}) pegparser.IterateActionType {
 				if targetBuildConfigs == configName {
-					buildVariants := val.(pegparser.Object).Get("buildConfigurations")
+					buildVariants := val.(pegparser.Object).ForceGet("buildConfigurations")
 					for _, buildVariant := range buildVariants.([]interface{}) {
 						validConfigs[buildVariant.(pegparser.Object).GetString("value")] = struct{}{}
 					}
@@ -1095,7 +1099,7 @@ func (p *PbxProject) addToSearchPaths(searchPath string, pbxfile *PbxFile) {
 		if unquoted(buildSettings.GetString("PRODUCT_NAME")) != p.productName() {
 			return pegparser.IterateActionContinue
 		}
-		searchPathsInterface := buildSettings.Get(searchPath)
+		searchPathsInterface := buildSettings.ForceGet(searchPath)
 		searchPathsStr, ok := searchPathsInterface.(string)
 		if ok && searchPathsStr == INHERITED {
 			buildSettings.Set(searchPath, []interface{}{INHERITED})
@@ -1229,27 +1233,27 @@ func (p *PbxProject) AddTarget(name, targetType, subfolder, bundleId string) err
 
 	// Build Configuration: Create
 	buildConfigurationsList := []pegparser.Object{
-		{
-			"name": "Debug",
-			"isa":  "XCBuildConfiguration",
-			"buildSettings": pegparser.Object{
-				"GCC_PREPROCESSOR_DEFINITIONS": []string{`"DEBUG=1"`, `"$(inherited)"`},
-				"INFOPLIST_FILE":               `"` + filepath.Join(targetSubfolder, targetSubfolder+"-Info.plist"+`"`),
-				"LD_RUNPATH_SEARCH_PATHS":      `"$(inherited) @executable_path/Frameworks @executable_path/../../Frameworks"`,
-				"PRODUCT_NAME":                 `"` + targetName + `"`,
-				"SKIP_INSTALL":                 "YES",
-			},
-		},
-		{
-			"name": "Release",
-			"isa":  "XCBuildConfiguration",
-			"buildSettings": pegparser.Object{
-				"INFOPLIST_FILE":          `"` + filepath.Join(targetSubfolder, targetSubfolder+"-Info.plist"+`"`),
-				"LD_RUNPATH_SEARCH_PATHS": `"$(inherited) @executable_path/Frameworks @executable_path/../../Frameworks"`,
-				"PRODUCT_NAME":            `"` + targetName + `"`,
-				"SKIP_INSTALL":            "YES",
-			},
-		},
+		pegparser.NewObjectWithData([]pegparser.SliceItem{
+			pegparser.NewObjectItem("name", "Debug"),
+			pegparser.NewObjectItem("isa", "XCBuildConfiguration"),
+			pegparser.NewObjectItem("buildSettings", pegparser.NewObjectWithData([]pegparser.SliceItem{
+				pegparser.NewObjectItem("GCC_PREPROCESSOR_DEFINITIONS", []string{`"DEBUG=1"`, `"$(inherited)"`}),
+				pegparser.NewObjectItem("INFOPLIST_FILE", `"`+filepath.Join(targetSubfolder, targetSubfolder+"-Info.plist"+`"`)),
+				pegparser.NewObjectItem("LD_RUNPATH_SEARCH_PATHS", `"$(inherited) @executable_path/Frameworks @executable_path/../../Frameworks"`),
+				pegparser.NewObjectItem("PRODUCT_NAME", `"`+targetName+`"`),
+				pegparser.NewObjectItem("SKIP_INSTALL", "YES"),
+			})),
+		}),
+		pegparser.NewObjectWithData([]pegparser.SliceItem{
+			pegparser.NewObjectItem("name", "Release"),
+			pegparser.NewObjectItem("isa", "XCBuildConfiguration"),
+			pegparser.NewObjectItem("buildSettings", pegparser.NewObjectWithData([]pegparser.SliceItem{
+				pegparser.NewObjectItem("INFOPLIST_FILE", `"`+filepath.Join(targetSubfolder, targetSubfolder+"-Info.plist"+`"`)),
+				pegparser.NewObjectItem("LD_RUNPATH_SEARCH_PATHS", `"$(inherited) @executable_path/Frameworks @executable_path/../../Frameworks"`),
+				pegparser.NewObjectItem("PRODUCT_NAME", `"`+targetName+`"`),
+				pegparser.NewObjectItem("SKIP_INSTALL", "YES"),
+			})),
+		}),
 	}
 
 	// Add optional bundleId to build configuration
@@ -1276,17 +1280,17 @@ func (p *PbxProject) AddTarget(name, targetType, subfolder, bundleId string) err
 	p.addToPbxBuildFileSection(productFile)
 
 	// Target: Create
-	target := pegparser.Object{
-		"isa":                    "PBXNativeTarget",
-		"name":                   `"` + targetName + `"`,
-		"productName":            `"` + targetName + `"`,
-		"productReference":       productFile.FileRef,
-		"productType":            `"` + producttypeForTargettype(targetType) + `"`,
-		"buildConfigurationList": buildConfigurations.UUID,
-		"buildPhases":            []interface{}{},
-		"buildRules":             []interface{}{},
-		"dependencies":           []interface{}{},
-	}
+	target := pegparser.NewObjectWithData([]pegparser.SliceItem{
+		pegparser.NewObjectItem("isa", "PBXNativeTarget"),
+		pegparser.NewObjectItem("name", `"`+targetName+`"`),
+		pegparser.NewObjectItem("productName", `"`+targetName+`"`),
+		pegparser.NewObjectItem("productReference", productFile.FileRef),
+		pegparser.NewObjectItem("productType", `"`+producttypeForTargettype(targetType)+`"`),
+		pegparser.NewObjectItem("buildConfigurationList", buildConfigurations.UUID),
+		pegparser.NewObjectItem("buildPhases", []interface{}{}),
+		pegparser.NewObjectItem("buildRules", []interface{}{}),
+		pegparser.NewObjectItem("dependencies", []interface{}{}),
+	})
 
 	// Target: Add to PBXNativeTarget section
 	p.addToPbxNativeTargetSection(targetUuid, target)
@@ -1348,21 +1352,23 @@ func pbxBuildFileObj(pbxfile *PbxFile) pegparser.Object {
 	obj.Set("isa", "PBXBuildFile")
 	obj.Set("fileRef", pbxfile.FileRef)
 	obj.Set(toCommentKey("fileRef"), pbxfile.Basename)
-	obj.Set("settings", pbxfile.Settings)
+	if !pbxfile.Settings.IsEmpty() {
+		obj.Set("settings", pbxfile.Settings)
+	}
 	return obj
 }
 
 func newPbxFileReferenceObj(pbxfile *PbxFile) pegparser.Object {
-	return pegparser.Object{
-		"isa":               "PBXFileReference",
-		"name":              `"` + pbxfile.Basename + `"`,
-		"path":              `"` + filepath.ToSlash(pbxfile.Path) + `"`,
-		"sourceTree":        pbxfile.SourceTree,
-		"fileEncoding":      pbxfile.FileEncoding,
-		"lastKnownFileType": pbxfile.LastKnownFileType,
-		"explicitFileType":  pbxfile.ExplicitFileType,
-		"includeInIndex":    pbxfile.IncludeInIndex,
-	}
+	return pegparser.NewObjectWithData([]pegparser.SliceItem{
+		pegparser.NewObjectItem("isa", "PBXFileReference"),
+		pegparser.NewObjectItem("name", `"`+pbxfile.Basename+`"`),
+		pegparser.NewObjectItem("fileEncoding", pbxfile.FileEncoding),
+		pegparser.NewObjectItem("lastKnownFileType", pbxfile.LastKnownFileType),
+		pegparser.NewObjectItem("path", `"`+filepath.ToSlash(pbxfile.Path)+`"`),
+		pegparser.NewObjectItem("sourceTree", pbxfile.SourceTree),
+		pegparser.NewObjectItem("explicitFileType", pbxfile.ExplicitFileType),
+		pegparser.NewObjectItem("includeInIndex", pbxfile.IncludeInIndex),
+	})
 }
 
 func pbxGroupChild(pbxfile *PbxFile) CommentValue {
@@ -1482,7 +1488,7 @@ func (p *PbxProject) correctForPath(pbxFile *PbxFile, groupName string) *PbxFile
 	r_group_dir := regexp.MustCompile("^" + groupName + "[\\\\/]")
 
 	group := p.pbxGroupByName(groupName)
-	if group != nil {
+	if !group.IsEmpty() {
 		if group.GetString("path") != "" {
 			pbxFile.Path = r_group_dir.ReplaceAllString(pbxFile.Path, "")
 		}
@@ -1494,7 +1500,7 @@ func (p *PbxProject) correctForPath(pbxFile *PbxFile, groupName string) *PbxFile
 func (p *PbxProject) searchPathForFile(pdxfile *PbxFile) string {
 	pluginsPath := ""
 	plugins := p.pbxGroupByName("Plugins")
-	if plugins != nil {
+	if !plugins.IsEmpty() {
 		pluginsPath = plugins.GetString("path")
 	}
 
@@ -1610,7 +1616,7 @@ func (p *PbxProject) getFirstProject() pegparser.ObjectWithUUID {
 
 func (p *PbxProject) getFirstTarget() pegparser.ObjectWithUUID {
 	project := p.getFirstProject()
-	firstTargetUuid := project.Object.Get("targets").([]interface{})[0].(pegparser.Object).GetString("value")
+	firstTargetUuid := project.Object.ForceGet("targets").([]interface{})[0].(pegparser.Object).GetString("value")
 	firstTarget := p.pbxNativeTargetSection.GetObject(firstTargetUuid)
 
 	return pegparser.ObjectWithUUID{
@@ -1641,10 +1647,10 @@ func (p *PbxProject) getTarget(productType string) (targetWithUUID pegparser.Obj
 
 func (p *PbxProject) addToPbxGroupType(childGroup CommentValue, groupKey, groupType string) {
 	group := p.getPBXGroupByKeyAndType(groupKey, groupType)
-	if group == nil {
+	if group.IsEmpty() {
 		return
 	}
-	children := group.Get("children")
+	children := group.ForceGet("children")
 	if children == nil {
 		return
 	}
@@ -1662,12 +1668,13 @@ func (p *PbxProject) addToPbxGroupByKey(pbxfile *PbxFile, groupKey string) {
 
 func (p *PbxProject) pbxCreateGroupWithType(name, pathName, groupType string) string {
 	//Create object
-	model := pegparser.Object{
-		"isa":        `"` + groupType + `"`,
-		"children":   []CommentValue{},
-		"name":       name,
-		"sourceTree": `"<group>"`,
-	}
+	model := pegparser.NewObjectWithData([]pegparser.SliceItem{
+		pegparser.NewObjectItem("isa", `"`+groupType+`"`),
+		pegparser.NewObjectItem("children", []interface{}{}),
+		pegparser.NewObjectItem("name", name),
+		pegparser.NewObjectItem("sourceTree", `"<group>"`),
+	})
+
 	if pathName != "" {
 		model.Set("path", pathName)
 	}
@@ -1675,7 +1682,7 @@ func (p *PbxProject) pbxCreateGroupWithType(name, pathName, groupType string) st
 
 	//add obj and commentObj to groups;
 	group := p.pbxGroupSection.GetObject(groupType)
-	if group == nil {
+	if group.IsEmpty() {
 		group = pegparser.NewObject()
 		p.pbxGroupSection.Set(groupType, group)
 	}
@@ -1695,9 +1702,9 @@ func (p *PbxProject) pbxCreateGroup(name, pathName string) string {
 
 func (p *PbxProject) removeFromPbxGroupAndType(pbxfile *PbxFile, groupKey, groupType string) {
 	group := p.getPBXGroupByKeyAndType(groupKey, groupType)
-	if group != nil {
+	if !group.IsEmpty() {
 		child := pbxGroupChild(pbxfile)
-		groupChildren := group.Get("children").([]interface{})
+		groupChildren := group.ForceGet("children").([]interface{})
 		for i, v := range groupChildren {
 			if child.Value == v.(pegparser.Object).GetString("value") && child.Comment == v.(pegparser.Object).GetString("comment") {
 				groupChildren = append(groupChildren[:i], groupChildren[i+1:]...)
@@ -1770,9 +1777,9 @@ func (p *PbxProject) AddLocalizationVariantGroup(name string) *PbxFile {
 	childGroup := CommentValue{
 		Value: groupKey,
 	}
-	if p.getPBXGroupByKey(groupKey) != nil {
+	if !p.getPBXGroupByKey(groupKey).IsEmpty() {
 		childGroup.Comment = p.getPBXGroupByKey(groupKey).GetString("name")
-	} else if p.getPBXVariantGroupByKey(groupKey) != nil {
+	} else if !p.getPBXVariantGroupByKey(groupKey).IsEmpty() {
 		childGroup.Comment = p.getPBXVariantGroupByKey(groupKey).GetString("name")
 	}
 	p.addToPbxGroupType(childGroup, resourceGroupKey, "PBXGroup")
@@ -1794,13 +1801,13 @@ func (p *PbxProject) AddKnownRegion(name string) {
 	}
 
 	project := p.pbxProjectSection.GetObject(firstProject.GetString("project"))
-	if project == nil {
+	if project.IsEmpty() {
 		return
 	}
 	if !project.Has("knownRegions") {
 		project.Set("knownRegions", []string{name})
 	} else if !p.HasKnownRegion(name) {
-		knownRegions := project.Get("knownRegions").([]interface{})
+		knownRegions := project.ForceGet("knownRegions").([]interface{})
 		knownRegions = append(knownRegions, name)
 		project.Set("knownRegions", knownRegions)
 	}
@@ -1814,10 +1821,10 @@ func (p *PbxProject) RemoveKnownRegion(name string) {
 
 	projectUuid := firstProject.GetString("project")
 	project := p.pbxProjectSection.GetObject(projectUuid)
-	if project == nil {
+	if project.IsEmpty() {
 		return
 	}
-	knownRegions := project.Get("knownRegions")
+	knownRegions := project.ForceGet("knownRegions")
 	if knownRegions == nil {
 		return
 	}
@@ -1839,10 +1846,10 @@ func (p *PbxProject) HasKnownRegion(name string) bool {
 
 	projectUuid := firstProject.GetString("project")
 	project := p.pbxProjectSection.GetObject(projectUuid)
-	if project == nil {
+	if project.IsEmpty() {
 		return false
 	}
-	knownRegions := project.Get("knownRegions")
+	knownRegions := project.ForceGet("knownRegions")
 	if knownRegions == nil {
 		return false
 	}
@@ -1868,9 +1875,9 @@ func (p *PbxProject) addFile(path, group string, opts PbxFileOptions) (*PbxFile,
 
 	pbxfile.FileRef = p.generateUuid()
 	p.addToPbxFileReferenceSection(pbxfile) // PBXFileReference
-	if p.getPBXGroupByKey(group) != nil {
+	if !p.getPBXGroupByKey(group).IsEmpty() {
 		p.addToPbxGroup(pbxfile, group) // PBXGroup
-	} else if p.getPBXVariantGroupByKey(group) != nil {
+	} else if !p.getPBXVariantGroupByKey(group).IsEmpty() {
 		p.addToPbxVariantGroup(pbxfile, group) // PBXVariantGroup
 	}
 
@@ -1888,9 +1895,9 @@ func (p *PbxProject) removeFile(path, group string, opt PbxFileOptions) *PbxFile
 
 	p.removeFromPbxFileReferenceSection(pbxfile) // PBXFileReference
 
-	if p.getPBXGroupByKey(group) != nil {
+	if !p.getPBXGroupByKey(group).IsEmpty() {
 		p.removeFromPbxGroup(pbxfile, group) // PBXGroup
-	} else if p.getPBXVariantGroupByKey(group) != nil {
+	} else if !p.getPBXVariantGroupByKey(group).IsEmpty() {
 		p.removeFromPbxVariantGroup(pbxfile, group) // PBXVariantGroup
 	}
 
@@ -1906,11 +1913,11 @@ func (p *PbxProject) GetBuildProperty(prop, build, targetName string) (props []s
 	validConfigs := make(map[string]struct{})
 	if targetName != "" {
 		target := p.pbxTargetByName(targetName)
-		if target != nil {
+		if !target.IsEmpty() {
 			targetBuildConfigs := target.GetString("buildConfigurationList")
 			p.pbxXCConfigurationListSection.ForeachWithFilter(func(configName string, val interface{}) pegparser.IterateActionType {
 				if targetBuildConfigs == configName {
-					buildVariants := val.(pegparser.Object).Get("buildConfigurations")
+					buildVariants := val.(pegparser.Object).ForceGet("buildConfigurations")
 					for _, buildVariant := range buildVariants.([]interface{}) {
 						validConfigs[buildVariant.(pegparser.Object).GetString("value")] = struct{}{}
 					}
@@ -1929,8 +1936,8 @@ func (p *PbxProject) GetBuildProperty(prop, build, targetName string) (props []s
 			}
 		}
 
-		if build == "" || val.(pegparser.Object).Get("name") == build {
-			props = interfaceToStringSlice(val.(pegparser.Object).Get(prop))
+		if build == "" || val.(pegparser.Object).ForceGet("name") == build {
+			props = interfaceToStringSlice(val.(pegparser.Object).ForceGet(prop))
 			return pegparser.IterateActionBreak
 		}
 		return pegparser.IterateActionContinue
@@ -2043,12 +2050,12 @@ func (p *PbxProject) AddTargetAttribute(prop, value string, target pegparser.Obj
 		return errors.New("No project found")
 	}
 	attributes := project.Object.GetObject("attributes")
-	if attributes == nil {
+	if attributes.IsEmpty() {
 		return errors.New("No attributes found")
 	}
 
 	targetAttrs := attributes.GetObject("TargetAttributes")
-	if targetAttrs == nil {
+	if targetAttrs.IsEmpty() {
 		targetAttrs = pegparser.NewObject()
 		attributes.Set("TargetAttributes", targetAttrs)
 	}
@@ -2061,7 +2068,7 @@ func (p *PbxProject) AddTargetAttribute(prop, value string, target pegparser.Obj
 	}
 
 	targetAttr := targetAttrs.GetObject(target.UUID)
-	if targetAttr != nil {
+	if !targetAttr.IsEmpty() {
 		targetAttr := pegparser.NewObject()
 		attributes.Set(target.UUID, targetAttr)
 	}
@@ -2075,7 +2082,7 @@ func (p *PbxProject) RemoveTargetAttribute(prop string, target pegparser.ObjectW
 		return errors.New("No project found")
 	}
 	attributes := project.Object.GetObject("attributes")
-	if attributes == nil {
+	if attributes.IsEmpty() {
 		return errors.New("No attributes found")
 	}
 	if target.UUID == "" {
@@ -2086,12 +2093,12 @@ func (p *PbxProject) RemoveTargetAttribute(prop string, target pegparser.ObjectW
 	}
 
 	targetAttrs := attributes.GetObject("TargetAttributes")
-	if targetAttrs == nil {
+	if targetAttrs.IsEmpty() {
 		return errors.New("No target attributes found")
 	}
 
 	targetAttr := targetAttrs.GetObject(target.UUID)
-	if targetAttr != nil {
+	if !targetAttr.IsEmpty() {
 		targetAttr.Delete(prop)
 	}
 	return nil

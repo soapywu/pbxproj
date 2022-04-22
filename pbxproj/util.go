@@ -101,10 +101,10 @@ func stringToInterfaceSlice(val []string) []interface{} {
 }
 
 func addToObjectList(obj pegparser.Object, key string, val interface{}) {
-	if obj == nil {
+	if obj.IsEmpty() {
 		return
 	}
-	list := obj.Get(key)
+	list := obj.ForceGet(key)
 	if list == nil {
 		list = []interface{}{val}
 	} else {
@@ -114,10 +114,10 @@ func addToObjectList(obj pegparser.Object, key string, val interface{}) {
 }
 
 func addToObjectListOnlyNotExist(obj pegparser.Object, key string, val interface{}, equal func(v1, v2 interface{}) bool) {
-	if obj == nil {
+	if obj.IsEmpty() {
 		return
 	}
-	list := obj.Get(key)
+	list := obj.ForceGet(key)
 	if list == nil {
 		list = []interface{}{val}
 	} else {
@@ -132,10 +132,10 @@ func addToObjectListOnlyNotExist(obj pegparser.Object, key string, val interface
 }
 
 func removeFromObjectList(obj pegparser.Object, key string, condition func(interface{}) bool, all bool) {
-	if obj == nil {
+	if obj.IsEmpty() {
 		return
 	}
-	list := obj.Get(key)
+	list := obj.ForceGet(key)
 	if list == nil {
 		return
 	}
