@@ -79,7 +79,6 @@ func (m *SliceMap) Clear() {
 }
 
 func (m *SliceMap) Size() int {
-
 	l := len(m.sl)
 	return l
 }
