@@ -28,8 +28,8 @@ import (
 	"regexp"
 	"strings"
 
-	"example.com/peg/pegparser"
 	"github.com/gofrs/uuid"
+	"github.com/soapy/pbxproj/pegparser"
 )
 
 type CommentValue struct {

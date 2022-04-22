@@ -5,7 +5,7 @@ import (
 	"strconv"
 	"strings"
 
-	"example.com/peg/pegparser"
+	"github.com/soapy/pbxproj/pegparser"
 )
 
 const COMMENT_KEY_SUFFIX = "_comment"

@@ -1,4 +1,4 @@
-module example.com/peg
+module github.com/soapy/pbxproj
 
 go 1.17
 
