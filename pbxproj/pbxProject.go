@@ -19,7 +19,6 @@ package pbxproj
 
 import (
 	"bytes"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -97,13 +96,12 @@ func (p *PbxProject) Parse() error {
 }
 
 func (p *PbxProject) Dump(writer io.Writer) error {
-	buffer := bytes.NewBuffer([]byte{})
-	jsonEncoder := json.NewEncoder(buffer)
-	jsonEncoder.SetEscapeHTML(false)
-	jsonEncoder.SetIndent("", "  ")
-	_ = jsonEncoder.Encode(p.Contents())
-	_, _ = writer.Write(buffer.Bytes())
-	return nil
+	bytes, err := pegparser.MarshalWithIndentEscape(p.Contents())
+	if err != nil {
+		return err
+	}
+	_, err = writer.Write(bytes)
+	return err
 }
 
 func (p *PbxProject) initFileReference() {

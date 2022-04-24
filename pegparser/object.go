@@ -1,6 +1,7 @@
 package pegparser
 
 import (
+	"bytes"
 	"encoding/json"
 	"reflect"
 )
@@ -56,8 +57,21 @@ func (o Object) toMarshalJSONData() map[string]interface{} {
 	return dataMap
 }
 
+// func (o Object) MarshalJSON() ([]byte, error) {
+// 	return json.Marshal(o.toMarshalJSONData())
+// }
+
+func MarshalWithIndentEscape(v interface{}) ([]byte, error) {
+	buffer := bytes.NewBuffer([]byte{})
+	jsonEncoder := json.NewEncoder(buffer)
+	jsonEncoder.SetEscapeHTML(false)
+	jsonEncoder.SetIndent("", "  ")
+	err := jsonEncoder.Encode(v)
+	return buffer.Bytes(), err
+}
+
 func (o Object) MarshalJSON() ([]byte, error) {
-	return json.Marshal(o.toMarshalJSONData())
+	return MarshalWithIndentEscape(o.toMarshalJSONData())
 }
 
 func (o Object) IsEmpty() bool {

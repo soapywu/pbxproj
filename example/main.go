@@ -15,10 +15,11 @@ func main() {
 		log.Fatal(err)
 	}
 	dumpToFile := func(name string) {
-		file, err := os.OpenFile(name, os.O_CREATE|os.O_WRONLY, 0644)
+		file, err := os.OpenFile(name, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
 		if err != nil {
 			log.Fatal(err)
 		}
+		defer file.Close()
 
 		err = project.Dump(file)
 		if err != nil {
