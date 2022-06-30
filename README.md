@@ -8,27 +8,47 @@ It's heavily mimicked and inspired by [cordova-node-xcode](https://github.com/ap
 
 # Usage
 ```go
-    import "github.com/soapywu/pbxproj/pbxproj"
+    package main
 
-    // Create a new project
-    projectPath := "project.pbxproj"
-    project := pbxproj.NewPbxProject(projectPath)
-    // Parse the project
-    err := project.Parse()
-    if err != nil {
-        panic(err)
+    import (
+        "log"
+        "github.com/soapywu/pbxproj/pbxproj"
+    )
+
+    func main() {
+        // Create a new project
+        projectPath := "project.pbxproj"
+        project := pbxproj.NewPbxProject(projectPath)
+        // Parse the project
+        err := project.Parse()
+        if err != nil {
+            log.Fatal(err)
+        }
+
+        // Dump the project structure as JSON
+        // project.Dump(os.Stdout)
+
+        // Add some files
+        err = project.AddHeaderFile("foo.h")
+        if err != nil {
+            log.Println(err)
+        }
+        err = project.AddSourceFile("foo.m")
+        if err != nil {
+            log.Println(err)
+        }
+        err = project.AddFramework("FooKit.framework")
+        if err != nil {
+            log.Println(err)
+        }
+
+        // Dump the modify project structure as JSON
+        // project.Dump(os.Stdout)
+
+        // Write the project back out
+        // pbxproj.NewPbxWriter(&project).Write("project.pbxproj")
+        _ = pbxproj.NewPbxWriter(&project).Write("modifiedProject.pbxproj")
     }
-    // Dump the project structure as JSON
-    // project.Dump(os.Stdout)
-
-    // Add a new Source file
-    err = project.AddSourceFile("foo.m")
-    if err != nil {
-        panic(err)
-    }
-
-    // Write the project back out
-    pbxproj.NewPbxWriter(&project).Write("project.pbxproj")
 ```
 # Working on the parser
 The .pbxProj parser(pegparser/pbxproj.go) is generated from the grammar in pegparser/pbxproj.peg by [pigeon](https://github.com/mna/pigeon).
