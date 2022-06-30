@@ -36,7 +36,14 @@
 
         result := make([]string, len(v.([]interface{})))
         for i, v := range v.([]interface{}) {
-            result[i] = string(v.([]uint8))
+            switch v := v.(type) {
+            case string:
+                result[i] = v
+            case []uint8:
+                result[i] = string(v)
+            default:
+                panic("unexpected type")
+            }
         }
 
         return strings.Join(result, "")
