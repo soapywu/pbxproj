@@ -2,11 +2,13 @@
 
 Go implement of Parser utility for xcodeproj project files, Allows you to edit xcodeproject files and write them back out.
 
-It's heavily mimicked and inspired by [cordova-node-xcode](https://github.com/apache/cordova-node-xcode)
+It's heavily mimicked and inspired by [cordova-node-xcode](https://github.com/apache/cordova-node-xcode).
+
+*Warning*: this project was not fully tested, use it at yout own risk.
 
 # Usage
 ```go
-    import "github.com/soapy/xcodeproj"
+    import "github.com/soapywu/pbxproj/pbxproj"
 
     // Create a new project
     projectPath := "project.pbxproj"
